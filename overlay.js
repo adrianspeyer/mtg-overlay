@@ -99,8 +99,8 @@
       <div style="background:rgba(255,255,255,0.02); padding:14px; border-radius:18px; border: 1px solid rgba(255,255,255,0.05); margin-bottom:12px;">
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
           ${getL('commander', 'EDH')}
-          ${getL('historicbrawl', 'Brawl (H)')}
-          ${getL('brawl', 'Brawl (S)')}
+          ${getL('brawl', 'Brawl')}
+          ${getL('alchemy', 'Alchemy')}
           ${getL('modern', 'Modern')}
           ${getL('standard', 'Standard')}
           ${getL('pioneer', 'Pioneer')}
