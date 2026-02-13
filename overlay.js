@@ -39,7 +39,7 @@
     const edhRes = await fetch(`https://json.edhrec.com/pages/cards/${edhName}.json`).catch(() => null);
     const edhData = edhRes ? await edhRes.json() : null;
 
-    /* Reliability Check for Decks */
+    /* Reliability Check for Decks & Synergy Stats */
     const numDecks = edhData?.card?.num_decks || edhData?.container?.json_dict?.card?.num_decks || 0;
     const topCmdr = edhData?.container?.json_dict?.cardlists?.find(l => l.tag === 'commanders')?.cardlist?.[0];
     
@@ -48,7 +48,7 @@
     else if (numDecks > 10000) usageInsight = "Format Staple";
     if (topCmdr && topCmdr.synergy > 10) usageInsight = `+${topCmdr.synergy}% synergy with ${topCmdr.name}`;
 
-    /* Explicit Legality Mapping (Hardcoded to Scryfall API Keys) */
+    /* Explicit Legality Mapping (Hardcoded to Scryfall API Keys to prevent "undefined") */
     const getL = (key, label) => {
       const status = card.legalities[key];
       let icon = '·', color = '#444';
@@ -71,7 +71,7 @@
         <button onclick="document.getElementById('${id}').remove()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; border-radius:50%; width:26px; height:26px; cursor:pointer; font-weight:bold;">✕</button>
       </div>
       
-      <img src="${imgUrl}" style="width:100%; border-radius:14px; margin-bottom:14px; border:1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 15px rgba(0,0,0,0.4);">
+      <img src="${imgUrl}" style="width:100%; border-radius:14px; margin-bottom:14px; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 15px rgba(0,0,0,0.4);">
       
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         <div style="background:rgba(255,255,255,0.04); padding:10px; border-radius:16px; text-align:center; border: 1px solid rgba(255,255,255,0.08);">
@@ -80,7 +80,7 @@
         </div>
         <div style="background:rgba(255,255,255,0.04); padding:10px; border-radius:16px; text-align:center; border: 1px solid rgba(255,255,255,0.08);">
           <div style="font-size:0.58em; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Decks</div>
-          <div style="color:#3498db; font-weight:900; font-size:1.25em;">${numDecks.toLocaleString()}</div>
+          <div style="color:#3498db; font-weight:900; font-size:1.25em;">${numDecks > 0 ? numDecks.toLocaleString() : 'N/A'}</div>
         </div>
       </div>
 
