@@ -3,105 +3,96 @@
   const existing = document.getElementById(id);
   if (existing) existing.remove();
 
-  /* Helper for name normalization (handles // cards like Fable or Zenos) */
-  const normalize = (name) => {
-    if (!name) return "";
-    return name.split(' // ')[0].trim();
+  /* SMART FETCH: Direct first (fast), Proxy fallback (reliable for iPad/Reddit) */
+  const smartFetch = async (url) => {
+    try {
+      const response = await fetch(url);
+      if (response.ok) return await response.json();
+    } catch (e) {
+      /* Fallback to CORSProxy.io if direct fetch is blocked by browser CSP */
+      const response = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+      if (response.ok) return await response.json();
+    }
+    throw new Error("Connection blocked");
   };
 
-  /* Format for URLs: spaces to '+' and remove special chars that break links */
-  const formatForUrl = (str) => {
-    return str.replace(/\s+/g, '+').replace(/[^\w+]/g, '');
-  };
+  const normalize = (n) => n ? n.split(' // ')[0].trim() : "";
+  const formatUrl = (s) => s.replace(/\s+/g, '+').replace(/[^\w+]/g, '');
 
   let cardName = window.getSelection().toString().trim();
   if (!cardName) {
-    cardName = prompt("Enter MTG Card Name:");
+    cardName = prompt("Card Name:");
     if (!cardName) return;
   }
 
-  /* Create UI Frame (Ultra-Compact for iPad/Mobile) */
+  /* Create Adaptive Container */
   const overlay = document.createElement('div');
   overlay.id = id;
   overlay.style = `
-    position: fixed; top: 8px; right: 8px; width: 90vw; max-width: 320px; 
-    max-height: calc(100vh - 16px); background: rgba(18, 18, 18, 0.98); color: #fff; 
-    border-radius: 20px; z-index: 2147483647; padding: 14px; 
-    border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 15px 40px rgba(0,0,0,0.8);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
-    backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
-    display: flex; flex-direction: column; line-height: 1.2;
+    position: fixed; top: 10px; right: 10px; width: 310px; 
+    max-height: calc(100vh - 20px); background: rgba(15, 15, 15, 0.98); color: #fff; 
+    border-radius: 20px; z-index: 2147483647; padding: 0; 
+    border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+    font-family: -apple-system, system-ui, sans-serif;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    display: flex; flex-direction: column; overflow: hidden;
   `;
-  overlay.innerHTML = `<div style="text-align:center; padding:15px; color:#00ff88; font-weight:bold; font-size:0.85em; letter-spacing:1px;">✨ SUMMONING...</div>`;
+  overlay.innerHTML = `<div style="text-align:center; padding:30px; color:#00ff88; font-weight:bold; font-size:0.8em;">SUMMONING...</div>`;
   document.body.appendChild(overlay);
 
   try {
-    const scryRes = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`);
-    if (!scryRes.ok) throw new Error(`Card not found.`);
-    const card = await scryRes.json();
-
+    const card = await smartFetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`);
     const baseName = normalize(card.name);
     const edhSlug = baseName.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
-    let edhData = null;
-    if (edhSlug) {
-      try {
-        const edhRes = await fetch(`https://json.edhrec.com/pages/cards/${edhSlug}.json`);
-        if (edhRes.ok) edhData = await edhRes.json();
-      } catch(e) {}
-    }
-
-    const numDecks = edhData?.card?.num_decks || 
-                     edhData?.container?.json_dict?.card?.num_decks || 
-                     edhData?.container?.json_dict?.cardlists?.find(l => l.header === "Decks")?.cardlist?.length || 0;
-                     
-    const topCmdr = edhData?.container?.json_dict?.cardlists?.find(l => l.tag === 'commanders')?.cardlist?.[0];
     
-    let usageInsight = "Niche Tech";
-    if (numDecks > 40000) usageInsight = "Global Staple";
-    else if (numDecks > 10000) usageInsight = "Format Staple";
-    if (topCmdr && topCmdr.synergy > 10) usageInsight = `+${topCmdr.synergy}% with ${topCmdr.name}`;
+    /* Async non-blocking load for EDHREC stats */
+    smartFetch(`https://json.edhrec.com/pages/cards/${edhSlug}.json`).then(data => {
+      const p = data?.card?.num_decks || data?.container?.json_dict?.card?.num_decks || 0;
+      const el = document.getElementById('decks-val');
+      if(el) el.innerText = p > 0 ? p.toLocaleString() : '0';
+    }).catch(()=>{});
 
     const getL = (key, label) => {
       const status = card.legalities?.[key] || 'not_legal';
-      let icon = '·', color = '#444';
-      if (status === 'legal') { icon = '✓'; color = '#4CAF50'; }
-      else if (status === 'banned' || status === 'restricted') { icon = '✕'; color = '#ff4444'; }
-      return `<div style="color:${color}; display:flex; align-items:center; gap:4px; font-size:0.68em; font-weight:700;">
-        <span>${icon}</span><span style="white-space:nowrap;">${label}</span>
+      let icon = '·', color = '#444', textColor = '#888';
+      if (status === 'legal') { icon = '✓'; color = '#00ff88'; textColor = '#fff'; }
+      else if (status === 'banned' || status === 'restricted') { icon = '✕'; color = '#ff4b4b'; textColor = '#ff4b4b'; }
+      return `<div style="color:${color}; display:flex; align-items:center; gap:4px; font-size:11px; font-weight:700;">
+        <span style="width:12px;">${icon}</span><span style="color:${textColor}">${label}</span>
       </div>`;
     };
 
     const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal || "";
-    const rarityCol = { common: '#fff', uncommon: '#95a5a6', rare: '#d4af37', mythic: '#e67e22' }[card.rarity] || '#fff';
-
-    const fishSet = formatForUrl(card.set_name);
-    const fishName = formatForUrl(baseName);
-    const goldFishUrl = `https://www.mtggoldfish.com/price/${fishSet}/${fishName}#paper`;
+    const fishUrl = `https://www.mtggoldfish.com/price/${formatUrl(card.set_name)}/${formatUrl(baseName)}#paper`;
 
     overlay.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:10px;">
-        <div style="max-width:230px; overflow:hidden;">
-            <b style="font-size:1em; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${card.name}</b>
-            <span style="font-size:0.6em; color:#888; text-transform:uppercase;">${card.set_name.substring(0, 22)} • <span style="color:${rarityCol}">${card.rarity}</span></span>
+      <div style="padding:10px 14px 6px; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+        <div style="overflow:hidden; flex:1; padding-right:10px;">
+          <div style="font-weight:800; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${card.name}</div>
+          <div style="font-size:9px; color:#888; text-transform:uppercase; letter-spacing:0.5px;">${card.set_name.substring(0,24)} • ${card.rarity}</div>
         </div>
-        <button onclick="document.getElementById('${id}').remove()" style="background:none; border:none; color:#888; font-size:1.2em; cursor:pointer; padding:0 5px;">✕</button>
-      </div>
-      
-      <img src="${imgUrl}" style="width:100%; border-radius:10px; margin-bottom:10px; border: 1px solid rgba(255,255,255,0.05);">
-      
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
-        <div style="background:rgba(255,255,255,0.04); padding:6px; border-radius:12px; text-align:center;">
-          <div style="font-size:0.5em; color:#888; letter-spacing:1px;">VALUE</div>
-          <div style="color:#00ff88; font-weight:900; font-size:1.1em;">$${card.prices?.usd || 'N/A'}</div>
-        </div>
-        <div style="background:rgba(255,255,255,0.04); padding:6px; border-radius:12px; text-align:center;">
-          <div style="font-size:0.5em; color:#888; letter-spacing:1px;">DECKS</div>
-          <div style="color:#3498db; font-weight:900; font-size:1.1em;">${numDecks > 0 ? numDecks.toLocaleString() : '0'}</div>
+        <div onclick="document.getElementById('${id}').remove()" style="width:44px; height:44px; display:flex; align-items:center; justify-content:center; margin:-10px -10px 0 0; cursor:pointer;">
+          <div style="background:rgba(255,255,255,0.15); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:bold;">✕</div>
         </div>
       </div>
 
-      <div style="background:rgba(255,255,255,0.02); padding:10px; border-radius:14px; border: 1px solid rgba(255,255,255,0.05); margin-bottom:8px;">
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:4px;">
+      <div style="overflow-y:auto; padding:0 14px 12px; display:flex; flex-direction:column; gap:8px;">
+        <div style="flex-shrink:1; min-height:100px; display:flex; justify-content:center;">
+          <img src="${imgUrl}" style="max-width:100%; max-height:40vh; aspect-ratio:2.5/3.5; object-fit:contain; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.5);">
+        </div>
+        
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
+          <div style="background:rgba(255,255,255,0.04); padding:4px; border-radius:10px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
+            <div style="font-size:8px; color:#888;">VALUE</div>
+            <div style="color:#00ff88; font-weight:800; font-size:14px;">$${card.prices?.usd || 'N/A'}</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.04); padding:4px; border-radius:10px; text-align:center; border:1px solid rgba(255,255,255,0.05);">
+            <div style="font-size:8px; color:#888;">DECKS</div>
+            <div id="decks-val" style="color:#3498db; font-weight:800; font-size:14px;">...</div>
+          </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.02); padding:8px; border-radius:12px; border:1px solid rgba(255,255,255,0.04); display:grid; grid-template-columns:1fr 1fr; gap:3px;">
           ${getL('commander', 'EDH')}
           ${getL('brawl', 'Brawl')}
           ${getL('alchemy', 'Alchemy')}
@@ -111,18 +102,15 @@
           ${getL('pauper', 'Pauper')}
           ${getL('historic', 'Arena')}
         </div>
-      </div>
 
-      <div style="font-size:0.62em; color:#bbb; text-align:center; margin-bottom:10px;">
-        <b>${usageInsight}</b>
-      </div>
-
-      <div style="display:flex; gap:8px;">
-        <a href="${goldFishUrl}" target="_blank" style="flex:1; background:#007AFF; color:white; text-align:center; padding:8px; border-radius:10px; text-decoration:none; font-size:0.75em; font-weight:bold;">Trend</a>
-        <a href="https://edhrec.com/cards/${edhSlug}" target="_blank" style="flex:1; background:rgba(255,255,255,0.1); color:white; text-align:center; padding:8px; border-radius:10px; text-decoration:none; font-size:0.75em; font-weight:bold;">EDHREC</a>
+        <div style="display:flex; gap:6px; margin-top:2px;">
+          <a href="${fishUrl}" target="_blank" style="flex:1; background:#007AFF; color:#fff; text-align:center; padding:8px; border-radius:10px; text-decoration:none; font-size:11px; font-weight:bold;">Trend</a>
+          <a href="https://edhrec.com/cards/${edhSlug}" target="_blank" style="flex:1; background:rgba(255,255,255,0.1); color:#fff; text-align:center; padding:8px; border-radius:10px; text-decoration:none; font-size:11px; font-weight:bold;">EDHREC</a>
+        </div>
       </div>
     `;
   } catch (err) {
-    overlay.innerHTML = `<div style="padding:20px; text-align:center; color:#ff4444; font-size:0.8em;"><b>Lookup Failed</b><br>${err.message}</div>`;
+    overlay.innerHTML = `<div style="padding:20px; text-align:center;"><b style="color:#ff4b4b;">Failed</b><br><small>${err.message}</small><br><button onclick="document.getElementById('${id}').remove()" style="margin-top:10px; background:#333; color:#fff; border:none; padding:5px 10px; border-radius:5px;">Close</button></div>`;
   }
 })();
+
