@@ -43,11 +43,14 @@
       try {
         const edhRes = await fetch(`https://json.edhrec.com/pages/cards/${edhName}.json`);
         if (edhRes.ok) edhData = await edhRes.json();
-      } catch(e) { /* EDHREC data missing is handled by UI fallbacks */ }
+      } catch(e) { /* Fallback handled below */ }
     }
 
-    /* Data Extraction */
-    const numDecks = edhData?.card?.num_decks || edhData?.container?.json_dict?.card?.num_decks || 0;
+    /* Data Extraction - Enhanced Deck Count Logic */
+    const numDecks = edhData?.card?.num_decks || 
+                     edhData?.container?.json_dict?.card?.num_decks || 
+                     edhData?.container?.json_dict?.cardlists?.find(l => l.header === "Decks")?.cardlist?.length || 0;
+                     
     const topCmdr = edhData?.container?.json_dict?.cardlists?.find(l => l.tag === 'commanders')?.cardlist?.[0];
     
     let usageInsight = "Niche Tech";
@@ -55,14 +58,14 @@
     else if (numDecks > 10000) usageInsight = "Format Staple";
     if (topCmdr && topCmdr.synergy > 10) usageInsight = `+${topCmdr.synergy}% synergy with ${topCmdr.name}`;
 
-    /* Legality Helper (Matching Scryfall API Keys) */
+    /* Legality Helper (Explicitly matching Scryfall API keys) */
     const getL = (key, label) => {
       const status = card.legalities?.[key] || 'not_legal';
       let icon = '·', color = '#444';
       if (status === 'legal') { icon = '✓'; color = '#4CAF50'; }
       else if (status === 'banned' || status === 'restricted') { icon = '✕'; color = '#ff4444'; }
-      return `<div style="color:${color}; display:flex; align-items:center; gap:5px; font-size:0.75em; font-weight:700;">
-        <span>${icon}</span> <span>${label}</span>
+      return `<div style="color:${color}; display:flex; align-items:center; gap:5px; font-size:0.75em; font-weight:700; min-height:1.2em;">
+        <span>${icon}</span> <span style="white-space:nowrap;">${label}</span>
       </div>`;
     };
 
@@ -89,7 +92,7 @@
         </div>
         <div style="background:rgba(255,255,255,0.04); padding:10px; border-radius:16px; text-align:center; border: 1px solid rgba(255,255,255,0.08);">
           <div style="font-size:0.58em; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Decks</div>
-          <div style="color:#3498db; font-weight:900; font-size:1.25em;">${numDecks > 0 ? numDecks.toLocaleString() : 'N/A'}</div>
+          <div style="color:#3498db; font-weight:900; font-size:1.25em;">${numDecks > 0 ? numDecks.toLocaleString() : '0'}</div>
         </div>
       </div>
 
