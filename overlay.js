@@ -3,15 +3,6 @@
   const existing = document.getElementById(id);
   if (existing) existing.remove();
 
-  /* Proxy helper to bypass Reddit/Safari Content Security Policy (CSP) */
-  const proxyFetch = async (url) => {
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl);
-    if (!response.ok) throw new Error("Network proxy error.");
-    const data = await response.json();
-    return JSON.parse(data.contents);
-  };
-
   /* Helper for name normalization (handles // cards like Fable) */
   const normalize = (name) => {
     if (!name) return "";
@@ -24,7 +15,7 @@
     if (!cardName) return;
   }
 
-  /* Create UI Frame */
+  /* Create UI Frame (Mobile & iPad Optimized) */
   const overlay = document.createElement('div');
   overlay.id = id;
   overlay.style = `
@@ -32,7 +23,7 @@
     max-height: 96vh; background: rgba(18, 18, 18, 0.98); color: #fff; 
     border-radius: 24px; z-index: 2147483647; padding: 18px; 
     border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-    font-family: -apple-system, system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
     backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
     display: flex; flex-direction: column; overflow-y: auto;
   `;
@@ -40,17 +31,22 @@
   document.body.appendChild(overlay);
 
   try {
-    /* Fetch Scryfall via Proxy */
-    const card = await proxyFetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`);
-    
-    /* Fetch EDHREC via Proxy */
+    /* Direct Fetch from Scryfall */
+    const scryRes = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`);
+    if (!scryRes.ok) throw new Error(`Card "${cardName}" not found.`);
+    const card = await scryRes.json();
+
+    /* Direct Fetch from EDHREC */
     const edhName = normalize(card.name);
     let edhData = null;
-    try {
-        edhData = await proxyFetch(`https://json.edhrec.com/pages/cards/${edhName}.json`);
-    } catch(e) { /* Fallback if EDHREC fails */ }
+    if (edhName) {
+      try {
+        const edhRes = await fetch(`https://json.edhrec.com/pages/cards/${edhName}.json`);
+        if (edhRes.ok) edhData = await edhRes.json();
+      } catch(e) { /* EDHREC data missing is handled by UI fallbacks */ }
+    }
 
-    /* Reliability Check for Decks & Synergy Stats */
+    /* Data Extraction */
     const numDecks = edhData?.card?.num_decks || edhData?.container?.json_dict?.card?.num_decks || 0;
     const topCmdr = edhData?.container?.json_dict?.cardlists?.find(l => l.tag === 'commanders')?.cardlist?.[0];
     
@@ -59,9 +55,9 @@
     else if (numDecks > 10000) usageInsight = "Format Staple";
     if (topCmdr && topCmdr.synergy > 10) usageInsight = `+${topCmdr.synergy}% synergy with ${topCmdr.name}`;
 
-    /* Explicit Legality Mapping (Scryfall Keys) */
+    /* Legality Helper (Matching Scryfall API Keys) */
     const getL = (key, label) => {
-      const status = card.legalities?.[key];
+      const status = card.legalities?.[key] || 'not_legal';
       let icon = '·', color = '#444';
       if (status === 'legal') { icon = '✓'; color = '#4CAF50'; }
       else if (status === 'banned' || status === 'restricted') { icon = '✕'; color = '#ff4444'; }
@@ -79,7 +75,7 @@
       <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
         <div style="max-width:240px; overflow:hidden;">
             <b style="font-size:1.1em; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${card.name}</b>
-            <span style="font-size:0.65em; color:#888; text-transform:uppercase; letter-spacing:0.5px;">${card.set_name} • <span style="color:${rarityCol}">${card.rarity}</span></span>
+            <span style="font-size:0.65em; color:#888; text-transform:uppercase; letter-spacing:0.5px;">${card.set_name || 'Unknown Set'} • <span style="color:${rarityCol}">${card.rarity || 'N/A'}</span></span>
         </div>
         <button onclick="document.getElementById('${id}').remove()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; border-radius:50%; width:26px; height:26px; cursor:pointer; font-weight:bold;">✕</button>
       </div>
@@ -115,11 +111,17 @@
       </div>
 
       <div style="display:flex; gap:10px;">
-        <a href="https://www.mtggoldfish.com/price/${card.set_name.replace(/ /g, '+')}/${card.name.replace(/ /g, '+')}#paper" target="_blank" style="flex:1; background:#007AFF; color:white; text-align:center; padding:12px; border-radius:14px; text-decoration:none; font-size:0.85em; font-weight:bold;">Trend Chart</a>
+        <a href="https://www.mtggoldfish.com/price/${encodeURIComponent(card.set_name || '')}/${encodeURIComponent(card.name || '')}#paper" target="_blank" style="flex:1; background:#007AFF; color:white; text-align:center; padding:12px; border-radius:14px; text-decoration:none; font-size:0.85em; font-weight:bold;">Trend Chart</a>
         <a href="https://edhrec.com/cards/${edhName}" target="_blank" style="flex:1; background:rgba(255,255,255,0.1); color:white; text-align:center; padding:12px; border-radius:14px; text-decoration:none; font-size:0.85em; font-weight:bold;">EDHREC</a>
       </div>
     `;
   } catch (err) {
-    overlay.innerHTML = `<div style="padding:20px; text-align:center; color:#ff4444;"><b>Lookup Failed</b><br><small>${err.message}</small></div>`;
+    overlay.innerHTML = `
+      <div style="padding:20px; text-align:center; color:#ff4444;">
+        <b>Lookup Failed</b><br>
+        <small style="display:block; margin: 10px 0; color: #888;">${err.message}</small>
+        <button onclick="document.getElementById('${id}').remove()" style="background:rgba(255,255,255,0.1); border:none; color:#fff; padding:5px 15px; border-radius:8px; cursor:pointer;">Close</button>
+      </div>
+    `;
   }
 })();
