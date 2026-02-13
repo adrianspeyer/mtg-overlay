@@ -3,7 +3,7 @@
   const existing = document.getElementById(id);
   if (existing) existing.remove();
 
-  // Helper for name normalization (handles // cards like Fable)
+  /* Helper for name normalization (handles // cards like Fable) */
   const normalize = (name) => {
     if (!name) return "";
     return name.toLowerCase().split(' // ')[0].replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
@@ -15,7 +15,7 @@
     if (!cardName) return;
   }
 
-  // Create UI Frame (Compact for mobile/iPad)
+  /* Create UI Frame (Compact for mobile/iPad) */
   const overlay = document.createElement('div');
   overlay.id = id;
   overlay.style = `
@@ -23,11 +23,11 @@
     max-height: 96vh; background: rgba(18, 18, 18, 0.98); color: #fff; 
     border-radius: 24px; z-index: 2147483647; padding: 18px; 
     border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-    font-family: -apple-system, system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
     backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
     display: flex; flex-direction: column; overflow-y: auto;
   `;
-  overlay.innerHTML = `<div style="text-align:center; padding:20px; color:#00ff88; font-weight:bold; font-size:0.9em;">✨ SUMMONING...</div>`;
+  overlay.innerHTML = `<div style="text-align:center; padding:20px; color:#00ff88; font-weight:bold; font-size:0.9em; letter-spacing:1px;">✨ SUMMONING...</div>`;
   document.body.appendChild(overlay);
 
   try {
@@ -39,6 +39,7 @@
     const edhRes = await fetch(`https://json.edhrec.com/pages/cards/${edhName}.json`).catch(() => null);
     const edhData = edhRes ? await edhRes.json() : null;
 
+    /* Reliability Check for Decks */
     const numDecks = edhData?.card?.num_decks || edhData?.container?.json_dict?.card?.num_decks || 0;
     const topCmdr = edhData?.container?.json_dict?.cardlists?.find(l => l.tag === 'commanders')?.cardlist?.[0];
     
@@ -47,7 +48,7 @@
     else if (numDecks > 10000) usageInsight = "Format Staple";
     if (topCmdr && topCmdr.synergy > 10) usageInsight = `+${topCmdr.synergy}% synergy with ${topCmdr.name}`;
 
-    // Hardcoded format mapping to ensure no "undefined" errors
+    /* Explicit Legality Mapping (Hardcoded to Scryfall API Keys) */
     const getL = (key, label) => {
       const status = card.legalities[key];
       let icon = '·', color = '#444';
@@ -64,18 +65,18 @@
     overlay.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:12px;">
         <div style="max-width:240px; overflow:hidden;">
-            <b style="font-size:1.1em; display:block; white-space:nowrap; text-overflow:ellipsis;">${card.name}</b>
-            <span style="font-size:0.65em; color:#888; text-transform:uppercase;">${card.set_name} • <span style="color:${rarityCol}">${card.rarity}</span></span>
+            <b style="font-size:1.1em; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${card.name}</b>
+            <span style="font-size:0.65em; color:#888; text-transform:uppercase; letter-spacing:0.5px;">${card.set_name} • <span style="color:${rarityCol}">${card.rarity}</span></span>
         </div>
-        <button onclick="document.getElementById('${id}').remove()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; border-radius:50%; width:26px; height:26px; cursor:pointer;">✕</button>
+        <button onclick="document.getElementById('${id}').remove()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; border-radius:50%; width:26px; height:26px; cursor:pointer; font-weight:bold;">✕</button>
       </div>
       
-      <img src="${imgUrl}" style="width:100%; border-radius:14px; margin-bottom:14px; border: 1px solid rgba(255,255,255,0.05);">
+      <img src="${imgUrl}" style="width:100%; border-radius:14px; margin-bottom:14px; border:1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 15px rgba(0,0,0,0.4);">
       
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         <div style="background:rgba(255,255,255,0.04); padding:10px; border-radius:16px; text-align:center; border: 1px solid rgba(255,255,255,0.08);">
           <div style="font-size:0.58em; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Value</div>
-          <div style="color:#00ff88; font-weight:900; font-size:1.25em;">$${card.prices.usd || 'N/A'}</div>
+          <div style="color:#00ff88; font-weight:900; font-size:1.25em; text-shadow: 0 0 10px rgba(0,255,136,0.3);">$${card.prices.usd || 'N/A'}</div>
         </div>
         <div style="background:rgba(255,255,255,0.04); padding:10px; border-radius:16px; text-align:center; border: 1px solid rgba(255,255,255,0.08);">
           <div style="font-size:0.58em; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Decks</div>
@@ -88,10 +89,10 @@
           ${getL('commander', 'EDH')}
           ${getL('historicbrawl', 'Brawl (H)')}
           ${getL('brawl', 'Brawl (S)')}
+          ${getL('modern', 'Modern')}
           ${getL('standard', 'Standard')}
           ${getL('pioneer', 'Pioneer')}
-          ${getL('modern', 'Modern')}
-          ${getL('legacy', 'Legacy')}
+          ${getL('pauper', 'Pauper')}
           ${getL('historic', 'Arena')}
         </div>
       </div>
@@ -106,6 +107,6 @@
       </div>
     `;
   } catch (err) {
-    overlay.innerHTML = `<div style="text-align:center; padding:20px; font-size:0.85em; color:#ff4444;">Lookup Failed. Please check the spelling or your connection.</div>`;
+    overlay.innerHTML = `<div style="text-align:center; padding:20px; font-size:0.85em; color:#ff4444;">Lookup Failed. Check name.</div>`;
   }
 })();
