@@ -3,6 +3,15 @@
   const existing = document.getElementById(id);
   if (existing) existing.remove();
 
+  /* Proxy helper to bypass Reddit/Safari Content Security Policy (CSP) */
+  const proxyFetch = async (url) => {
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const response = await fetch(proxyUrl);
+    if (!response.ok) throw new Error("Network proxy error.");
+    const data = await response.json();
+    return JSON.parse(data.contents);
+  };
+
   /* Helper for name normalization (handles // cards like Fable) */
   const normalize = (name) => {
     if (!name) return "";
@@ -15,7 +24,7 @@
     if (!cardName) return;
   }
 
-  /* Create UI Frame (Compact for mobile/iPad) */
+  /* Create UI Frame */
   const overlay = document.createElement('div');
   overlay.id = id;
   overlay.style = `
@@ -23,7 +32,7 @@
     max-height: 96vh; background: rgba(18, 18, 18, 0.98); color: #fff; 
     border-radius: 24px; z-index: 2147483647; padding: 18px; 
     border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
+    font-family: -apple-system, system-ui, sans-serif;
     backdrop-filter: blur(25px); -webkit-backdrop-filter: blur(25px);
     display: flex; flex-direction: column; overflow-y: auto;
   `;
@@ -31,13 +40,15 @@
   document.body.appendChild(overlay);
 
   try {
-    const scryRes = await fetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`);
-    if (!scryRes.ok) throw new Error("Not found");
-    const card = await scryRes.json();
-
+    /* Fetch Scryfall via Proxy */
+    const card = await proxyFetch(`https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName)}`);
+    
+    /* Fetch EDHREC via Proxy */
     const edhName = normalize(card.name);
-    const edhRes = await fetch(`https://json.edhrec.com/pages/cards/${edhName}.json`).catch(() => null);
-    const edhData = edhRes ? await edhRes.json() : null;
+    let edhData = null;
+    try {
+        edhData = await proxyFetch(`https://json.edhrec.com/pages/cards/${edhName}.json`);
+    } catch(e) { /* Fallback if EDHREC fails */ }
 
     /* Reliability Check for Decks & Synergy Stats */
     const numDecks = edhData?.card?.num_decks || edhData?.container?.json_dict?.card?.num_decks || 0;
@@ -48,9 +59,9 @@
     else if (numDecks > 10000) usageInsight = "Format Staple";
     if (topCmdr && topCmdr.synergy > 10) usageInsight = `+${topCmdr.synergy}% synergy with ${topCmdr.name}`;
 
-    /* Explicit Legality Mapping (Hardcoded to Scryfall API Keys to prevent "undefined") */
+    /* Explicit Legality Mapping (Scryfall Keys) */
     const getL = (key, label) => {
-      const status = card.legalities[key];
+      const status = card.legalities?.[key];
       let icon = '·', color = '#444';
       if (status === 'legal') { icon = '✓'; color = '#4CAF50'; }
       else if (status === 'banned' || status === 'restricted') { icon = '✕'; color = '#ff4444'; }
@@ -59,7 +70,9 @@
       </div>`;
     };
 
-    const imgUrl = card.image_uris?.normal || card.card_faces?.[0]?.image_uris?.normal;
+    const imgUrl = card.image_uris?.normal || 
+                   card.card_faces?.[0]?.image_uris?.normal || "";
+    
     const rarityCol = { common: '#fff', uncommon: '#95a5a6', rare: '#d4af37', mythic: '#e67e22' }[card.rarity] || '#fff';
 
     overlay.innerHTML = `
@@ -71,12 +84,12 @@
         <button onclick="document.getElementById('${id}').remove()" style="background:rgba(255,255,255,0.15); border:none; color:#fff; border-radius:50%; width:26px; height:26px; cursor:pointer; font-weight:bold;">✕</button>
       </div>
       
-      <img src="${imgUrl}" style="width:100%; border-radius:14px; margin-bottom:14px; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 15px rgba(0,0,0,0.4);">
+      ${imgUrl ? `<img src="${imgUrl}" style="width:100%; border-radius:14px; margin-bottom:14px; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 4px 15px rgba(0,0,0,0.4);">` : ''}
       
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px;">
         <div style="background:rgba(255,255,255,0.04); padding:10px; border-radius:16px; text-align:center; border: 1px solid rgba(255,255,255,0.08);">
           <div style="font-size:0.58em; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Value</div>
-          <div style="color:#00ff88; font-weight:900; font-size:1.25em; text-shadow: 0 0 10px rgba(0,255,136,0.3);">$${card.prices.usd || 'N/A'}</div>
+          <div style="color:#00ff88; font-weight:900; font-size:1.25em;">$${card.prices?.usd || 'N/A'}</div>
         </div>
         <div style="background:rgba(255,255,255,0.04); padding:10px; border-radius:16px; text-align:center; border: 1px solid rgba(255,255,255,0.08);">
           <div style="font-size:0.58em; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:2px;">Decks</div>
@@ -107,6 +120,6 @@
       </div>
     `;
   } catch (err) {
-    overlay.innerHTML = `<div style="text-align:center; padding:20px; font-size:0.85em; color:#ff4444;">Lookup Failed. Check name.</div>`;
+    overlay.innerHTML = `<div style="padding:20px; text-align:center; color:#ff4444;"><b>Lookup Failed</b><br><small>${err.message}</small></div>`;
   }
 })();
