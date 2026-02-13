@@ -113,4 +113,3 @@
     overlay.innerHTML = `<div style="padding:20px; text-align:center;"><b style="color:#ff4b4b;">Failed</b><br><small>${err.message}</small><br><button onclick="document.getElementById('${id}').remove()" style="margin-top:10px; background:#333; color:#fff; border:none; padding:5px 10px; border-radius:5px;">Close</button></div>`;
   }
 })();
-
